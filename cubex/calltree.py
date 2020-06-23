@@ -45,6 +45,50 @@ class CallTree(object):
             for child in self.children:
                 child.print_tree(indent + '  ', depth=depth)
 
+
+    def get_tree(self, dict, depth=None):
+        dict['value'] = sum(self.metrics['time'])
+        if depth is not None:
+            depth = depth - 1
+
+        if depth is None or depth > 0:
+            for child in self.children:
+                dict[child.region.name] = {}
+                child.get_tree(dict[child.region.name], depth=depth)
+
+    def show_tree(self, name='', index='0', filt=[], tref=None, tmin=None, depth=None):
+        if len(filt) == 0:
+            show = True
+        else:
+            show = False
+            for f in filt:
+                 if f in name: show = True
+
+        val = sum(self.metrics['time'])
+        if tref is not None:
+           val = 100.*val/tref
+
+        if tmin is not None:
+           if val <= tmin:
+               #print val, tmin
+               show = False
+
+        if show: print('%s: %f'%(name, val))
+
+        if depth is not None:
+            depth = depth - 1
+
+        if depth is None or depth > 0:
+            for idx, child in enumerate(self.children):
+                if idx is not None:
+                    child.show_tree(name=name+','+ child.region.name, \
+                                   index=index+','+str(idx), filt=filt, \
+                                   tref=tref, tmin=tmin, depth=depth)
+                else:
+                    child.show_tree(name=name+','+ child.region.name, \
+                                   index=index, filt=filt, \
+                                   tref=tref, tmin=tmin, depth=depth)
+
     def print_weights(self, metric_name, interval=None):
         # TODO: Check that metric is inclusive
         # TODO: Check arguments
@@ -69,3 +113,26 @@ class CallTree(object):
         for region in sorted(weights, key=weights.get, reverse=True):
             print('{:.3f}: [{}] {}'
                   ''.format(weights[region], reg_idx[region], region))
+
+    def get_weights(self, metric_name, interval=None):
+        # TODO: Check that metric is inclusive
+        # TODO: Check arguments
+
+        sloc, eloc = interval if interval else (None, None)
+
+        self_sum = sum(self.metrics[metric_name][sloc:eloc])
+
+        weights = {}
+        reg_idx = {}
+        children_sum = 0.
+        for idx, child in enumerate(self.children):
+            child_sum = sum(child.metrics[metric_name][sloc:eloc])
+            children_sum += child_sum
+
+            weights[child.region.name] = child_sum / self_sum
+            reg_idx[child.region.name] = idx
+
+        weights[self.region.name] = (self_sum - children_sum) / self_sum
+        reg_idx[self.region.name] = '-'
+
+        return weights, reg_idx
